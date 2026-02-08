@@ -14,11 +14,6 @@ pub fn discover_projects(cwd: &Path) -> Result<Vec<Project>> {
     return nx::get_projects(cwd);
   }
 
-  // Try Rush (rush.json)
-  if rush::is_rush_workspace(cwd) {
-    return rush::get_projects(cwd);
-  }
-
   // Try Turbo (turbo.json)
   if turbo::is_turbo_workspace(cwd) {
     return turbo::get_projects(cwd);
@@ -27,6 +22,11 @@ pub fn discover_projects(cwd: &Path) -> Result<Vec<Project>> {
   // Try generic workspaces (npm/yarn/pnpm/bun)
   if workspaces::is_workspace(cwd) {
     return workspaces::get_projects(cwd);
+  }
+
+  // Try Rush (rush.json) — checked last to avoid interfering with existing workspace types
+  if rush::is_rush_workspace(cwd) {
+    return rush::get_projects(cwd);
   }
 
   // If none found, return empty
