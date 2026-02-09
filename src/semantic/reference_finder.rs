@@ -27,7 +27,7 @@ impl<'a> ReferenceFinder<'a> {
   pub fn new(analyzer: &'a WorkspaceAnalyzer, cwd: &Path, profiler: Arc<Profiler>) -> Self {
     Self {
       analyzer,
-      resolver: Resolver::new(super::create_resolve_options(cwd)),
+      resolver: Resolver::new(super::create_resolve_options(cwd, &analyzer.projects)),
       cwd: cwd.to_path_buf(),
       resolution_cache: RefCell::new(FxHashMap::default()),
       profiler,
@@ -299,7 +299,6 @@ impl<'a> ReferenceFinder<'a> {
     let resolved = match self.resolver.resolve(context, specifier) {
       Ok(resolution) => {
         let resolved = resolution.path();
-        // Make it relative to cwd
         resolved
           .strip_prefix(&self.cwd)
           .ok()

@@ -76,7 +76,7 @@ impl WorkspaceAnalyzer {
   fn build_import_index(&mut self, cwd: &Path) -> Result<()> {
     use oxc_resolver::Resolver;
 
-    let resolver = Resolver::new(super::create_resolve_options(cwd));
+    let resolver = Resolver::new(super::create_resolve_options(cwd, &self.projects));
     use tracing::debug;
 
     let mut index: ImportIndexMap = FxHashMap::default();
