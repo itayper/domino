@@ -1,4 +1,5 @@
 pub mod nx;
+pub mod rush;
 pub mod turbo;
 pub mod workspaces;
 
@@ -21,6 +22,11 @@ pub fn discover_projects(cwd: &Path) -> Result<Vec<Project>> {
   // Try generic workspaces (npm/yarn/pnpm/bun)
   if workspaces::is_workspace(cwd) {
     return workspaces::get_projects(cwd);
+  }
+
+  // Try Rush (rush.json) — checked last to avoid interfering with existing workspace types
+  if rush::is_rush_workspace(cwd) {
+    return rush::get_projects(cwd);
   }
 
   // If none found, return empty
