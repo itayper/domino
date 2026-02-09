@@ -179,8 +179,8 @@ impl WorkspaceAnalyzer {
       "/index.tsx",
       "/index.js",
     ] {
-      let candidate = if suffix.starts_with('/') {
-        base.join(&suffix[1..])
+      let candidate = if let Some(stripped) = suffix.strip_prefix('/') {
+        base.join(stripped)
       } else {
         PathBuf::from(format!("{}{}", base_str, suffix))
       };

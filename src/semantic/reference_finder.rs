@@ -378,9 +378,9 @@ impl<'a> ReferenceFinder<'a> {
 
     for suffix in SUFFIXES {
       buf.clear();
-      if suffix.starts_with('/') {
+      if let Some(stripped) = suffix.strip_prefix('/') {
         buf.push(&base);
-        buf.push(&suffix[1..]); // skip leading '/'
+        buf.push(stripped);
       } else {
         // Append extension (handles e.g. colors.css → colors.css.ts for vanilla-extract)
         buf.push(format!("{}{}", base_str, suffix).as_str());
