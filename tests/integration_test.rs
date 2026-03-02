@@ -1679,7 +1679,10 @@ fn test_js_to_ts_extension_resolution() {
   let tmp = TempDir::new().expect("Failed to create temp dir");
   // Canonicalize to resolve symlinks (e.g. /var -> /private/var on macOS),
   // ensuring path consistency with the resolver's canonicalized output.
-  let root = tmp.path().canonicalize().expect("Failed to canonicalize temp dir");
+  let root = tmp
+    .path()
+    .canonicalize()
+    .expect("Failed to canonicalize temp dir");
 
   // -- scaffold monorepo ------------------------------------------------
   // lib/src/utils.ts  — the source file

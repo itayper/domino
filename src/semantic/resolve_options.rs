@@ -106,3 +106,144 @@ pub fn create_resolve_options(cwd: &Path, projects: &[Project]) -> ResolveOption
     ..Default::default()
   }
 }
+
+/// Extract the alias target path for a given package name from resolve options.
+/// Returns `None` if the alias is not found.
+#[cfg(test)]
+fn alias_target(opts: &ResolveOptions, name: &str) -> Option<String> {
+  opts.alias.iter().find_map(|(k, vs)| {
+    if k == name {
+      vs.first().and_then(|v| match v {
+        AliasValue::Path(p) => Some(p.clone()),
+        _ => None,
+      })
+    } else {
+      None
+    }
+  })
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use std::fs;
+  use std::path::PathBuf;
+  use tempfile::TempDir;
+
+  #[test]
+  fn test_alias_prefers_src_when_it_exists() {
+    let tmp = TempDir::new().unwrap();
+    let cwd = tmp.path();
+
+    // Create project with a src/ subdirectory
+    let proj_dir = cwd.join("packages/my-lib");
+    fs::create_dir_all(proj_dir.join("src")).unwrap();
+
+    let projects = vec![Project {
+      name: "@scope/my-lib".to_string(),
+      source_root: PathBuf::from("packages/my-lib"),
+      ts_config: None,
+      implicit_dependencies: vec![],
+      targets: vec![],
+    }];
+
+    let opts = create_resolve_options(cwd, &projects);
+    let target = alias_target(&opts, "@scope/my-lib").unwrap();
+
+    assert!(
+      target.ends_with("packages/my-lib/src"),
+      "Expected alias to point at src/ subdir, got: {}",
+      target
+    );
+  }
+
+  #[test]
+  fn test_alias_falls_back_when_no_src_dir() {
+    let tmp = TempDir::new().unwrap();
+    let cwd = tmp.path();
+
+    // Create project WITHOUT a src/ subdirectory (e.g. sources at root)
+    let proj_dir = cwd.join("packages/my-lib");
+    fs::create_dir_all(&proj_dir).unwrap();
+
+    let projects = vec![Project {
+      name: "@scope/my-lib".to_string(),
+      source_root: PathBuf::from("packages/my-lib"),
+      ts_config: None,
+      implicit_dependencies: vec![],
+      targets: vec![],
+    }];
+
+    let opts = create_resolve_options(cwd, &projects);
+    let target = alias_target(&opts, "@scope/my-lib").unwrap();
+
+    assert!(
+      target.ends_with("packages/my-lib"),
+      "Expected alias to fall back to project root (no src/), got: {}",
+      target
+    );
+    assert!(
+      !target.ends_with("packages/my-lib/src"),
+      "Should NOT point at non-existent src/ subdir, got: {}",
+      target
+    );
+  }
+
+  #[test]
+  fn test_alias_skips_src_heuristic_when_source_root_already_ends_in_src() {
+    let tmp = TempDir::new().unwrap();
+    let cwd = tmp.path();
+
+    // Nx-style: source_root already includes /src
+    let proj_dir = cwd.join("packages/my-lib/src");
+    fs::create_dir_all(&proj_dir).unwrap();
+
+    let projects = vec![Project {
+      name: "@scope/my-lib".to_string(),
+      source_root: PathBuf::from("packages/my-lib/src"),
+      ts_config: None,
+      implicit_dependencies: vec![],
+      targets: vec![],
+    }];
+
+    let opts = create_resolve_options(cwd, &projects);
+    let target = alias_target(&opts, "@scope/my-lib").unwrap();
+
+    assert!(
+      target.ends_with("packages/my-lib/src"),
+      "Expected alias to use source_root as-is (already ends in src), got: {}",
+      target
+    );
+    // Must NOT double up to packages/my-lib/src/src
+    assert!(
+      !target.ends_with("src/src"),
+      "Should not double-nest src/, got: {}",
+      target
+    );
+  }
+
+  #[test]
+  fn test_no_panic_when_source_root_does_not_exist() {
+    let tmp = TempDir::new().unwrap();
+    let cwd = tmp.path();
+
+    // source_root points to a directory that doesn't exist at all
+    let projects = vec![Project {
+      name: "@scope/ghost".to_string(),
+      source_root: PathBuf::from("packages/ghost"),
+      ts_config: None,
+      implicit_dependencies: vec![],
+      targets: vec![],
+    }];
+
+    // Must not panic — is_dir() on non-existent path returns false
+    let opts = create_resolve_options(cwd, &projects);
+    let target = alias_target(&opts, "@scope/ghost").unwrap();
+
+    assert!(
+      target.ends_with("packages/ghost"),
+      "Expected alias to fall back to (non-existent) project root, got: {}",
+      target
+    );
+  }
+}
