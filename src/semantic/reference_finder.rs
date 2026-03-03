@@ -325,71 +325,9 @@ impl<'a> ReferenceFinder<'a> {
   }
 
   /// Simple fallback resolution for relative imports.
-  /// Uses a reusable buffer to minimise allocations during candidate probing.
+  /// Delegates to the shared free function in `semantic::simple_resolve_relative`.
   fn simple_resolve(&self, context: &Path, specifier: &str) -> Option<PathBuf> {
-    if !specifier.starts_with('.') {
-      return None;
-    }
-
-    // Reusable absolute-path buffer: context/specifier with room for the longest suffix we append.
-    let base = context.join(specifier);
-    let base_str = base.to_string_lossy().into_owned();
-    let mut buf = PathBuf::with_capacity(base_str.len() + 12); // 12 covers "/index.tsx\0" + margin
-
-    // Helper: check candidate and return cwd-relative path if it exists.
-    let try_candidate = |buf: &Path| -> Option<PathBuf> {
-      if self.cwd.join(buf).exists() {
-        buf.strip_prefix(&self.cwd).ok().map(|p| p.to_path_buf())
-      } else {
-        None
-      }
-    };
-
-    // 1. .js/.jsx → .ts/.tsx remapping (ESM convention)
-    if let Some(stem) = specifier.strip_suffix(".js") {
-      let stem_path = context.join(stem);
-      let stem_str = stem_path.to_string_lossy();
-      for ext in &[".ts", ".tsx"] {
-        buf.clear();
-        buf.push(format!("{}{}", stem_str, ext).as_str());
-        if let Some(p) = try_candidate(&buf) {
-          return Some(p);
-        }
-      }
-    } else if let Some(stem) = specifier.strip_suffix(".jsx") {
-      buf.clear();
-      buf.push(format!("{}.tsx", context.join(stem).to_string_lossy()).as_str());
-      if let Some(p) = try_candidate(&buf) {
-        return Some(p);
-      }
-    }
-
-    // 2. Standard extension probing + index file resolution
-    const SUFFIXES: &[&str] = &[
-      ".ts",
-      ".tsx",
-      ".js",
-      ".jsx",
-      "/index.ts",
-      "/index.tsx",
-      "/index.js",
-    ];
-
-    for suffix in SUFFIXES {
-      buf.clear();
-      if let Some(stripped) = suffix.strip_prefix('/') {
-        buf.push(&base);
-        buf.push(stripped);
-      } else {
-        // Append extension (handles e.g. colors.css → colors.css.ts for vanilla-extract)
-        buf.push(format!("{}{}", base_str, suffix).as_str());
-      }
-      if let Some(p) = try_candidate(&buf) {
-        return Some(p);
-      }
-    }
-
-    None
+    super::simple_resolve_relative(&self.cwd, context, specifier)
   }
 
   /// Check if a symbol is re-exported from a file

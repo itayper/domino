@@ -1796,3 +1796,109 @@ export function main() {
     affected
   );
 }
+
+#[test]
+fn test_jsx_to_tsx_extension_resolution() {
+  let tmp = TempDir::new().expect("Failed to create temp dir");
+  let root = tmp
+    .path()
+    .canonicalize()
+    .expect("Failed to canonicalize temp dir");
+
+  // lib/src/Widget.tsx — the source file (TSX)
+  // app/src/index.ts  — imports Widget using .jsx extension
+  let lib_src = root.join("lib/src");
+  let app_src = root.join("app/src");
+  fs::create_dir_all(&lib_src).unwrap();
+  fs::create_dir_all(&app_src).unwrap();
+
+  fs::write(
+    lib_src.join("Widget.tsx"),
+    r#"export const Widget = () => null;
+"#,
+  )
+  .unwrap();
+
+  // app imports with .jsx extension (should resolve to .tsx)
+  fs::write(
+    app_src.join("index.ts"),
+    r#"import { Widget } from '../../lib/src/Widget.jsx';
+
+export function main() {
+  return Widget;
+}
+"#,
+  )
+  .unwrap();
+
+  fs::write(
+    root.join("lib/package.json"),
+    r#"{"name": "@test/lib", "version": "0.0.0"}"#,
+  )
+  .unwrap();
+  fs::write(
+    root.join("app/package.json"),
+    r#"{"name": "@test/app", "version": "0.0.0"}"#,
+  )
+  .unwrap();
+
+  // -- init git repo & baseline commit -----------------------------------
+  git_in(&root, &["init"]);
+  git_in(&root, &["config", "user.email", "test@test.com"]);
+  git_in(&root, &["config", "user.name", "Test"]);
+  git_in(&root, &["branch", "-M", "main"]);
+  git_in(&root, &["add", "."]);
+  git_in(&root, &["commit", "-m", "initial"]);
+
+  // -- create feature branch with a change in lib ------------------------
+  git_in(&root, &["checkout", "-b", "feature"]);
+
+  fs::write(
+    lib_src.join("Widget.tsx"),
+    r#"export const Widget = () => <div>modified</div>;
+"#,
+  )
+  .unwrap();
+  git_in(&root, &["add", "."]);
+  git_in(&root, &["commit", "-m", "modify Widget"]);
+
+  // -- run find_affected -------------------------------------------------
+  let config = TrueAffectedConfig {
+    cwd: root.to_path_buf(),
+    base: "main".to_string(),
+    root_ts_config: None,
+    projects: vec![
+      Project {
+        name: "lib".to_string(),
+        source_root: PathBuf::from("lib"),
+        ts_config: None,
+        implicit_dependencies: vec![],
+        targets: vec![],
+      },
+      Project {
+        name: "app".to_string(),
+        source_root: PathBuf::from("app"),
+        ts_config: None,
+        implicit_dependencies: vec![],
+        targets: vec![],
+      },
+    ],
+    include: vec![],
+    ignored_paths: vec![],
+  };
+
+  let profiler = Arc::new(Profiler::new(false));
+  let result = find_affected(config, profiler).expect("find_affected failed");
+  let affected = result.affected_projects;
+
+  assert!(
+    affected.contains(&"lib".to_string()),
+    "lib should be affected (file was changed). Got: {:?}",
+    affected
+  );
+  assert!(
+    affected.contains(&"app".to_string()),
+    "app should be affected (imports lib/src/Widget.tsx via .jsx extension). Got: {:?}",
+    affected
+  );
+}
